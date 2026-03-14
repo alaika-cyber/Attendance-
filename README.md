@@ -12,7 +12,7 @@ Production-oriented attendance platform for educational institutions with:
 - Analytics dashboard APIs (top students, spoof summaries)
 - Hybrid chatbot (rule-based + OpenAI integration)
 - Automatic notification center for students/admin
-- Cloud-ready Docker deployment
+- Local development setup with FastAPI + React
 
 ## 0. New Feature Highlights
 
@@ -171,14 +171,14 @@ Notification endpoints:
 - Role-based authorization (student/admin)
 - Request validation with Pydantic
 - Isolated classwise attendance model
-- Containerized deployment using Docker Compose
 - Nginx reverse proxy in front of API
 
-## 4. Local and Cloud-Ready Setup
+## 4. Local Setup
 
 ### Prerequisites
 
-- Docker + Docker Compose
+- Python 3.12+
+- `pip`
 - Node.js 20+ (for frontend dev server)
 
 ### Environment
@@ -188,10 +188,14 @@ Notification endpoints:
 3. Optionally set `OPENAI_API_KEY`
 4. For emails/alerts, configure SMTP values
 
-### Option A: Run Full Stack with Docker (Backend + Nginx)
+### Backend Setup (FastAPI)
 
 ```bash
-docker compose up --build
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Backend API health:
@@ -200,21 +204,9 @@ Backend API health:
 curl http://localhost:8000/api/v1/health
 ```
 
-Nginx proxy health:
+### Frontend Setup (React)
 
-```bash
-curl http://localhost/api/v1/health
-```
-
-### Option B: Recommended Dev Mode (Docker backend + React frontend)
-
-1. Start backend services:
-
-```bash
-docker compose up --build
-```
-
-2. In a second terminal, start frontend:
+In a second terminal:
 
 ```bash
 cd frontend
@@ -222,7 +214,7 @@ npm install
 npm run dev
 ```
 
-3. Open frontend:
+Open frontend:
 
 - `http://localhost:5173`
 
@@ -231,7 +223,8 @@ npm run dev
 After backend startup, create admin account:
 
 ```bash
-docker compose exec api python /app/scripts/bootstrap_admin.py
+cd backend
+PYTHONPATH=. python scripts/bootstrap_admin.py
 ```
 
 Default login:
@@ -286,7 +279,8 @@ Example unit test exists for geofence logic in [backend/tests/test_geofence.py](
 Run tests:
 
 ```bash
-docker compose exec api pytest -q
+cd backend
+PYTHONPATH=. pytest -q
 ```
 
 ## 9. Frontend Application
