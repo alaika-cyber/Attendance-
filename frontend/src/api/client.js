@@ -25,6 +25,7 @@ async function request(path, { method = "GET", token, body } = {}) {
 export const api = {
   health: () => request("/health"),
   login: (payload) => request("/auth/login", { method: "POST", body: payload }),
+  me: (token) => request("/auth/me", { token }),
   registerStudent: (payload) => request("/registration/student", { method: "POST", body: payload }),
   markAttendance: (payload, token) =>
     request("/attendance/mark", { method: "POST", body: payload, token }),

@@ -10,6 +10,12 @@ const TABS = [
   { id: "chatbot", label: "Chatbot" }
 ];
 
+const ROLE_TABS = {
+  guest: ["overview", "register"],
+  student: ["overview", "attendance", "chatbot"],
+  admin: ["overview", "admin"]
+};
+
 const emptyRegistration = {
   full_name: "",
   email: "",
@@ -32,6 +38,7 @@ const emptyAttendance = {
 export default function App() {
   const [activeTab, setActiveTab] = useState("overview");
   const [token, setToken] = useState(localStorage.getItem("attendance_token") || "");
+  const [userRole, setUserRole] = useState("guest");
   const [health, setHealth] = useState("checking");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -73,6 +80,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!token) {
+      setUserRole("guest");
+      return;
+    }
+
+    api
+      .me(token)
+      .then((me) => {
+        setUserRole(me.role);
+      })
+      .catch(() => {
+        setUserRole("guest");
+        setToken("");
+        localStorage.removeItem("attendance_token");
+      });
+  }, [token]);
+
+  useEffect(() => {
     if (!token || activeTab !== "admin") return;
     loadPendingApprovals();
     loadGeofence();
@@ -96,6 +121,19 @@ export default function App() {
   }, [token]);
 
   const isLoggedIn = useMemo(() => Boolean(token), [token]);
+  const visibleTabs = useMemo(() => {
+    const allowedTabIds = ROLE_TABS[userRole] || ROLE_TABS.guest;
+    return TABS.filter((tab) => allowedTabIds.includes(tab.id));
+  }, [userRole]);
+  const isAdmin = userRole === "admin";
+  const isStudent = userRole === "student";
+
+  useEffect(() => {
+    const allowedTabIds = ROLE_TABS[userRole] || ROLE_TABS.guest;
+    if (!allowedTabIds.includes(activeTab)) {
+      setActiveTab(allowedTabIds[0]);
+    }
+  }, [activeTab, userRole]);
 
   function clearAlerts() {
     setMessage("");
@@ -109,6 +147,8 @@ export default function App() {
       const response = await api.login(auth);
       setToken(response.access_token);
       localStorage.setItem("attendance_token", response.access_token);
+      const me = await api.me(response.access_token);
+      setUserRole(me.role);
       try {
         const summary = await api.studentSummary(response.access_token);
         setStudentSummary(summary);
@@ -122,6 +162,7 @@ export default function App() {
         setNotifications([]);
       }
       setMessage("Login successful.");
+      setActiveTab(me.role === "admin" ? "admin" : "attendance");
     } catch (err) {
       setError(err.message);
     }
@@ -129,9 +170,11 @@ export default function App() {
 
   function logout() {
     setToken("");
+    setUserRole("guest");
     localStorage.removeItem("attendance_token");
     setStudentSummary(null);
     setNotifications([]);
+    setActiveTab("overview");
     setMessage("Logged out.");
   }
 
@@ -407,7 +450,7 @@ export default function App() {
       </header>
 
       <nav className="tabbar">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -454,8 +497,8 @@ export default function App() {
             <h2>System Snapshot</h2>
             <div className="metrics">
               <div>
-                <p className="metric-value">{isLoggedIn ? "Authorized" : "Guest"}</p>
-                <p className="metric-label">Session</p>
+                <p className="metric-value">{isLoggedIn ? userRole.toUpperCase() : "GUEST"}</p>
+                <p className="metric-label">Role</p>
               </div>
               <div>
                 <p className="metric-value">{dashboard.spoof_summary.total_attempts || 0}</p>
@@ -466,7 +509,7 @@ export default function App() {
                 <p className="metric-label">Top Students Loaded</p>
               </div>
             </div>
-            <button className="btn ghost" type="button" onClick={loadDashboard} disabled={!isLoggedIn}>
+            <button className="btn ghost" type="button" onClick={loadDashboard} disabled={!isLoggedIn || !isAdmin}>
               Refresh Dashboard Data
             </button>
 
@@ -514,7 +557,7 @@ export default function App() {
         </section>
       ) : null}
 
-      {activeTab === "register" ? (
+      {activeTab === "register" && !isLoggedIn ? (
         <section className="card">
           <h2>Student Registration and Live Capture</h2>
           <form onSubmit={submitRegistration} className="grid form-grid">
@@ -587,7 +630,7 @@ export default function App() {
         </section>
       ) : null}
 
-      {activeTab === "attendance" ? (
+      {activeTab === "attendance" && isStudent ? (
         <section className="card">
           <h2>Mark Attendance</h2>
           <p className="muted">Requires approved student account and active login token.</p>
@@ -640,7 +683,7 @@ export default function App() {
         </section>
       ) : null}
 
-      {activeTab === "admin" ? (
+      {activeTab === "admin" && isAdmin ? (
         <section className="grid two-col">
           <article className="card">
             <h2>Approve or Reject Student</h2>
@@ -1044,7 +1087,7 @@ export default function App() {
         </section>
       ) : null}
 
-      {activeTab === "chatbot" ? (
+      {activeTab === "chatbot" && isStudent ? (
         <section className="card">
           <h2>Hybrid Attendance Chatbot</h2>
           <p className="muted">Ask questions such as attendance percentage or shortage alerts.</p>

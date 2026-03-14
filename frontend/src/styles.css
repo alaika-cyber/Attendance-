@@ -298,11 +298,17 @@ textarea {
 
 .camera-preview,
 .image-preview {
+  display: block;
   width: 100%;
   border-radius: 12px;
   margin-top: 0.5rem;
   max-height: 240px;
   object-fit: cover;
+}
+
+.camera-preview {
+  min-height: 180px;
+  background: rgba(24, 32, 37, 0.08);
 }
 
 .toolbar {

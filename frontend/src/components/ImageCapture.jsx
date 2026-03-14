@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -12,37 +12,82 @@ function fileToBase64(file) {
 export default function ImageCapture({ label, onChange }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const streamRef = useRef(null);
 
   const [preview, setPreview] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
+  const [streamReady, setStreamReady] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
 
   async function startCamera() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera API not supported");
+      }
+
+      stopCamera();
+      setStreamReady(false);
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      streamRef.current = stream;
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        video.onloadedmetadata = async () => {
+          try {
+            await video.play();
+          } catch {
+            // Browser may still block autoplay in rare cases.
+          }
+          setStreamReady(true);
+        };
       }
       setCameraOn(true);
       setError("");
-    } catch (err) {
+    } catch {
       setError("Camera access failed. Use upload as fallback.");
     }
   }
 
   function stopCamera() {
-    const stream = videoRef.current?.srcObject;
+    const stream = streamRef.current || videoRef.current?.srcObject;
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
+      streamRef.current = null;
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
     }
     setCameraOn(false);
+    setStreamReady(false);
   }
 
   function captureFrame() {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
+
+    if (!video.videoWidth || !video.videoHeight) {
+      setError("Live preview is not ready yet. Please wait a moment and try again.");
+      return;
+    }
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -92,7 +137,12 @@ export default function ImageCapture({ label, onChange }) {
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      {cameraOn ? <video ref={videoRef} autoPlay playsInline className="camera-preview" /> : null}
+      {cameraOn ? (
+        <>
+          {!streamReady ? <p className="muted">Starting live preview...</p> : null}
+          <video ref={videoRef} autoPlay muted playsInline className="camera-preview" />
+        </>
+      ) : null}
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       {preview ? <img src={preview} alt="Captured preview" className="image-preview" /> : null}
